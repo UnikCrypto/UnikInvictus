@@ -2,6 +2,11 @@ import os
 from openai import OpenAI
 from dotenv import load_dotenv
 load_dotenv(dotenv_path="config/.env")
+# Always resolve paths relative to this file so the script works from any
+# working directory.
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+load_dotenv(dotenv_path=os.path.join(BASE_DIR, "config/.env"))
 api_key = os.getenv("OPENAI_API_KEY")
 if not api_key or api_key.strip() == "":
     raise ValueError("OpenAI API key is missing. Please check your .env file.")
@@ -21,6 +26,8 @@ def generate_script(prompt, model="gpt-3.5-turbo"):
 if __name__ == "__main__":
     input_prompt_path = "input/prompt.txt"
     output_script_path = "output/generated_script.txt"
+    input_prompt_path = os.path.join(BASE_DIR, "input", "prompt.txt")
+    output_script_path = os.path.join(BASE_DIR, "output", "generated_script.txt")
 
     if not os.path.exists(input_prompt_path):
         raise FileNotFoundError(f"Prompt file not found at {input_prompt_path}")
