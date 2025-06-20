@@ -2,11 +2,22 @@ import os
 import openai
 from dotenv import load_dotenv
 
-# Always resolve paths relative to this file so the script works from any
-# working directory.
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-load_dotenv(dotenv_path=os.path.join(BASE_DIR, "config/.env"))
+# Resolve paths relative to this file so the script works from any
+# working directory and from different repository layouts (either placed
+# in the repo root or in a ``scripts`` subfolder).
+THIS_DIR = os.path.dirname(os.path.abspath(__file__))
+PARENT_DIR = os.path.abspath(os.path.join(THIS_DIR, os.pardir))
+
+# Try loading ``config/.env`` from the current directory first and then
+# from the parent directory. This ensures the API key is picked up
+# regardless of where the script resides.
+for directory in (THIS_DIR, PARENT_DIR):
+    env_path = os.path.join(directory, "config", ".env")
+    if os.path.isfile(env_path):
+        load_dotenv(env_path)
+        break
+
 api_key = os.getenv("OPENAI_API_KEY")
 if not api_key or api_key.strip() == "":
     raise ValueError("OpenAI API key is missing. Please check your .env file.")
@@ -14,45 +25,36 @@ if not api_key or api_key.strip() == "":
 # Configure the OpenAI package globally for convenience
 openai.api_key = api_key
 
-def generate_script(prompt, model="gpt-3.5-turbo"):
+SYSTEM_MESSAGE = "You are a helpful assistant that writes marketing video scripts."
+
+def generate_script(prompt: str, model: str = "gpt-3.5-turbo") -> str:
     """Generate a short marketing video script using OpenAI models.
 
-    The function first tries a chat-based completion. If the current API key
-    does not have access to the specified chat model, it falls back to the
-    ``text-davinci-003`` completion model.
+    The function first tries a chat-based completion using ``model``. If the
+    project does not have access to that model (for example a 403 or model not
+    found error), it falls back to ``text-davinci-003``.
     """
     try:
         response = openai.chat.completions.create(
             model=model,
             messages=[
-                {
-                    "role": "system",
-                    "content": (
-                        "You are a helpful assistant that writes marketing video "
-                        "scripts."
-                    ),
-                },
+                {"role": "system", "content": SYSTEM_MESSAGE},
                 {"role": "user", "content": prompt},
             ],
         )
         return response.choices[0].message.content.strip()
-    except openai.PermissionDeniedError:
+    except (openai.PermissionDeniedError, openai.NotFoundError):
         # Fallback for API keys that cannot access chat models
-        completion = openai.Completion.create(
+        completion = openai.completions.create(
             model="text-davinci-003",
-            prompt=(
-                "You are a helpful assistant that writes marketing video scripts.\n"
-                f"{prompt}"
-            ),
+            prompt=f"{SYSTEM_MESSAGE}\n{prompt}",
             max_tokens=500,
         )
         return completion.choices[0].text.strip()
 
 if __name__ == "__main__":
-    input_prompt_path = "input/prompt.txt"
-    output_script_path = "output/generated_script.txt"
-    input_prompt_path = os.path.join(BASE_DIR, "input", "prompt.txt")
-    output_script_path = os.path.join(BASE_DIR, "output", "generated_script.txt")
+    input_prompt_path = os.path.join(THIS_DIR, "input", "prompt.txt")
+    output_script_path = os.path.join(THIS_DIR, "output", "generated_script.txt")
 
     if not os.path.exists(input_prompt_path):
         raise FileNotFoundError(f"Prompt file not found at {input_prompt_path}")
