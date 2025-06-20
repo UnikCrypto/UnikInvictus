@@ -1,7 +1,7 @@
 import os
-from openai import OpenAI
+import openai
 from dotenv import load_dotenv
-load_dotenv(dotenv_path="config/.env")
+
 # Always resolve paths relative to this file so the script works from any
 # working directory.
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -11,17 +11,42 @@ api_key = os.getenv("OPENAI_API_KEY")
 if not api_key or api_key.strip() == "":
     raise ValueError("OpenAI API key is missing. Please check your .env file.")
 
-client = OpenAI(api_key=api_key)
+# Configure the OpenAI package globally for convenience
+openai.api_key = api_key
 
 def generate_script(prompt, model="gpt-3.5-turbo"):
-    response = client.chat.completions.create(
-        model=model,
-        messages=[
-            {"role": "system", "content": "You are a helpful assistant that writes marketing video scripts."},
-            {"role": "user", "content": prompt}
-        ]
-    )
-    return response.choices[0].message.content
+    """Generate a short marketing video script using OpenAI models.
+
+    The function first tries a chat-based completion. If the current API key
+    does not have access to the specified chat model, it falls back to the
+    ``text-davinci-003`` completion model.
+    """
+    try:
+        response = openai.chat.completions.create(
+            model=model,
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "You are a helpful assistant that writes marketing video "
+                        "scripts."
+                    ),
+                },
+                {"role": "user", "content": prompt},
+            ],
+        )
+        return response.choices[0].message.content.strip()
+    except openai.PermissionDeniedError:
+        # Fallback for API keys that cannot access chat models
+        completion = openai.Completion.create(
+            model="text-davinci-003",
+            prompt=(
+                "You are a helpful assistant that writes marketing video scripts.\n"
+                f"{prompt}"
+            ),
+            max_tokens=500,
+        )
+        return completion.choices[0].text.strip()
 
 if __name__ == "__main__":
     input_prompt_path = "input/prompt.txt"
